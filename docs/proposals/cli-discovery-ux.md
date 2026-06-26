@@ -18,8 +18,10 @@ related: [../../README.md]
 > command names, dimmed summaries — by adding a **styled help renderer to
 > `clikit`**. Because clikit is the shared toolkit, one change upgrades `m`, `v`,
 > and every future domain at once. **This proposal scopes Phase 1 only**
-> (styled curated help + pager); Phases 2–3 (interactive faces) are sketched as
-> a deliberate follow-on, not committed.
+> (styled curated help + pager); Phase 2 (the interactive `explore` palette) was a
+> deliberate follow-on. (A once-mooted Phase 3 `browser`/Miller-columns face is
+> **rejected as out of scope** — Miller columns are for browsing data, not a fixed
+> command tree.)
 
 ---
 
@@ -192,11 +194,14 @@ Each repo runs the **Increment Protocol** (memory + tracker + commit/push to
   and **runnable-vs-needs-args badges** (derived from required args in the
   schema). Mounted as a reusable `clikit.ExploreCmd`, like `SchemaCmd`. This is
   `vista-info-hub`'s `menu`.
-- **Phase 3 — `browser`.** Ranger-style Miller-column explorer with breadcrumbs +
-  fuzzy filter over the same `SchemaDoc`. High polish, low necessity; gate on
-  whether Phase 2's interaction model proves wanted.
+- ~~Phase 3 — `browser` (Miller columns)~~ **REJECTED / OUT OF SCOPE
+  (2026-06-26).** Miller columns are a pattern for browsing **data** (deep,
+  open-ended hierarchies — a filesystem, a record tree). A CLI's command surface is
+  a small, fixed, shallow tree that `explore` (Phase 2) already covers. There is no
+  data-browsing problem here, so there is no `browser`. Discovery-UX work ends at
+  Phase 2.
 
-Both are additive and reuse Phase 1's introspection + style foundation.
+Phase 2 is additive and reuses Phase 1's introspection + style foundation.
 
 ---
 
@@ -214,7 +219,7 @@ Both are additive and reuse Phase 1's introspection + style foundation.
 | `group:""` tags + repin in v-cli | **DONE** 2026-06-26 | clikit v0.2.0 + v-pkg v0.4.0; Domains/Scaffold/Introspect (`222802d`) |
 | **Phase 2** — `explore` palette in clikit (`palette.go`+`explore.go`+`ExploreCmd`) | **DONE** 2026-06-26 | Bubbletea TUI; bold-white groups / green commands / yellow detail / plain `[status]` text; one-line bottom status bar; non-TTY → full help; **tagged v0.3.2** |
 | Mount `ExploreCmd` + repin in m / v-pkg / v-cli | **DONE** 2026-06-26 | `m explore` (`4443b0c`); `v-pkg explore` (**tag v0.5.0**); `v explore` (`24a3692`); all clikit v0.3.2 |
-| Phase 3 (`browser` Miller columns) | NOT STARTED | sketch in §6 |
+| ~~Phase 3 (`browser` Miller columns)~~ | **REJECTED — out of scope** | Miller columns are for browsing data, not a fixed command tree; discovery-UX ends at Phase 2 |
 
 **Phase 1 rollout COMPLETE (2026-06-26):** clikit → m-cli → v-pkg → v-cli, all
 gate-green and verified. Landing-set curation deferred (the current landing page
@@ -224,8 +229,9 @@ defaults to the full group heads, which fits one screen for all four tools).
 (`clikit.ExploreCmd`) landed in clikit (tagged v0.3.2) and is mounted across the
 suite — `m explore`, `v-pkg explore`, `v explore` — all pinned to clikit v0.3.2.
 Navigation logic is pure/testable (`palette.go`); the Bubbletea model
-(`explore.go`) is rendering + key handling. Only Phase 3 (`browser`) remains, as a
-sketch.
+(`explore.go`) is rendering + key handling. **The discovery-UX effort is complete
+at Phase 2** — Phase 3 (`browser`/Miller columns) is rejected as out of scope
+(that pattern is for browsing data, not a fixed command surface).
 
 ## 7. Risks / open questions
 

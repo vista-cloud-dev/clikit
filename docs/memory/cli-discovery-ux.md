@@ -1,6 +1,6 @@
 ---
 name: cli-discovery-ux
-description: clikit discovery UX — Phase 1 (styled grouped help + pager, landed across m/v 2026-06-26) and Phase 2 (interactive `explore` Bubbletea palette over the command tree, landed in clikit 2026-06-26). Phase 3 (browser) still a sketch.
+description: clikit discovery UX — Phase 1 (styled grouped help + pager) and Phase 2 (interactive `explore` Bubbletea palette), both landed across m/v 2026-06-26. COMPLETE — a Phase 3 browser/Miller-columns face is rejected as out of scope (Miller columns browse data, not a fixed command tree).
 metadata:
   type: project
 ---
@@ -54,7 +54,9 @@ error paths unaffected.
    files, delete the dir, `go mod tidy`, gates.
 3. Add `group:""` tags + curated landing sets in m-cli / v-cli / v-pkg.
 
-Phase 3 (`browser` Miller columns) remains a sketch; it reuses this foundation.
+A once-mooted Phase 3 `browser` (Miller columns) is **rejected as out of scope**:
+Miller columns are for browsing **data** (deep open-ended hierarchies), not a small
+fixed command surface that `explore` already covers. Discovery-UX ends at Phase 2.
 
 ---
 
