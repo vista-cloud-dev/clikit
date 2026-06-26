@@ -212,18 +212,20 @@ Both are additive and reuse Phase 1's introspection + style foundation.
 | `group:""` tags in m-cli | **DONE** 2026-06-26 | Author/Quality/Engine/Sync/Introspect |
 | `group:""` tags + repin in v-pkg | **DONE** 2026-06-26 | clikit v0.2.0; Inspect/Transform/Build & install/Back-out; **tagged v0.4.0** |
 | `group:""` tags + repin in v-cli | **DONE** 2026-06-26 | clikit v0.2.0 + v-pkg v0.4.0; Domains/Scaffold/Introspect (`222802d`) |
-| **Phase 2** — `explore` palette in clikit (`palette.go`+`explore.go`+`ExploreCmd`) | **DONE** 2026-06-26 | Bubbletea TUI over the command tree; non-TTY → full help; unit-tested; gates green |
-| Mount `ExploreCmd` + repin in m / v / v-pkg | TODO | per repo (clikit v0.3.0) |
+| **Phase 2** — `explore` palette in clikit (`palette.go`+`explore.go`+`ExploreCmd`) | **DONE** 2026-06-26 | Bubbletea TUI; bold-white groups / green commands / yellow detail / plain `[status]` text; one-line bottom status bar; non-TTY → full help; **tagged v0.3.2** |
+| Mount `ExploreCmd` + repin in m / v-pkg / v-cli | **DONE** 2026-06-26 | `m explore` (`4443b0c`); `v-pkg explore` (**tag v0.5.0**); `v explore` (`24a3692`); all clikit v0.3.2 |
 | Phase 3 (`browser` Miller columns) | NOT STARTED | sketch in §6 |
 
 **Phase 1 rollout COMPLETE (2026-06-26):** clikit → m-cli → v-pkg → v-cli, all
 gate-green and verified. Landing-set curation deferred (the current landing page
 defaults to the full group heads, which fits one screen for all four tools).
 
-**Phase 2 LANDED in clikit (2026-06-26):** the interactive `explore` palette
-(`clikit.ExploreCmd`). Navigation logic is pure/testable (`palette.go`); the
-Bubbletea model (`explore.go`) is the rendering + key layer. Mounting it in the
-consumers + repinning to clikit v0.3.0 is the remaining rollout step.
+**Phase 2 COMPLETE (2026-06-26):** the interactive `explore` palette
+(`clikit.ExploreCmd`) landed in clikit (tagged v0.3.2) and is mounted across the
+suite — `m explore`, `v-pkg explore`, `v explore` — all pinned to clikit v0.3.2.
+Navigation logic is pure/testable (`palette.go`); the Bubbletea model
+(`explore.go`) is rendering + key handling. Only Phase 3 (`browser`) remains, as a
+sketch.
 
 ## 7. Risks / open questions
 
