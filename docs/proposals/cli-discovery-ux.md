@@ -207,10 +207,16 @@ Both are additive and reuse Phase 1's introspection + style foundation.
 | clikit: styled grouped help renderer (`help.go`) | **DONE** 2026-06-26 | `kong.Help(helpPrinter)`; groups from `group:""` tags; two-tier landing/full |
 | clikit: pager (`pager.go`) | **DONE** 2026-06-26 | `pageThrough` + `$PAGER`/`less -FRX`; `CLIKIT_NO_PAGER` override |
 | clikit: tests + gates | **DONE** 2026-06-26 | `help_test.go`/`pager_test.go`; gofmt/vet/lint/`-race`/govulncheck green; smoke-tested end-to-end |
-| Tag clikit release (e.g. `v0.2.0`) | TODO (user-explicit) | so consumers can pin the new help |
-| Migrate m-cli off vendored `m-cli/clikit/` | TODO | add require + rewrite import in 6 files + delete dir |
-| `group:""` tags + landing sets in m / v / v-pkg | TODO | per repo |
+| Tag clikit release `v0.2.0` | **DONE** 2026-06-26 | tagged + pushed |
+| Migrate m-cli off vendored `m-cli/clikit/` | **DONE** 2026-06-26 | shared `clikit v0.2.0`; full `-race` green (`a406287`) |
+| `group:""` tags in m-cli | **DONE** 2026-06-26 | Author/Quality/Engine/Sync/Introspect |
+| `group:""` tags + repin in v-pkg | **DONE** 2026-06-26 | clikit v0.2.0; Inspect/Transform/Build & install/Back-out; **tagged v0.4.0** |
+| `group:""` tags + repin in v-cli | **DONE** 2026-06-26 | clikit v0.2.0 + v-pkg v0.4.0; Domains/Scaffold/Introspect (`222802d`) |
 | Phase 2 (`explore`/`menu`) · Phase 3 (`browser`) | NOT STARTED | sketches in §6 |
+
+**Phase 1 rollout COMPLETE (2026-06-26):** clikit → m-cli → v-pkg → v-cli, all
+gate-green and verified. Landing-set curation deferred (the current landing page
+defaults to the full group heads, which fits one screen for all four tools).
 
 ## 7. Risks / open questions
 
