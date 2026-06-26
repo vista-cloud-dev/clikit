@@ -74,6 +74,8 @@ for free. New deps: `github.com/charmbracelet/bubbletea` (+ bubbles family).
   move, →/l descend, ←/h/backspace up, ⏎ select-leaf (or descend), `/` filter, q/esc
   quit. Detail strip shows summary + a **runnable / needs-args / group badge**.
   On selecting a leaf it quits and prints that command's help via `emitHelp`.
+  A **one-line bottom status bar** (`detailLine`) shows the focused command's full
+  path + summary + badge, width-truncated so it never wraps.
 - `ExploreCmd.Run(c, k)` uses `interactiveTTY()` (stdin AND stdout TTY); **non-TTY
   falls back to the full styled help** (verified: `m explore | head` → grouped help,
   exit 0).

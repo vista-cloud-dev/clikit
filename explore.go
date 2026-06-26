@@ -125,32 +125,53 @@ func (m exploreModel) View() string {
 		fmt.Fprintln(&b, c.Faint("    (no matches)"))
 	}
 
-	// Detail strip for the focused item.
-	fmt.Fprintln(&b)
-	if sel := m.ps.selected(); sel != nil {
-		fmt.Fprintln(&b, "  "+sel.summary)
-		fmt.Fprintln(&b, "  "+m.badge(sel))
-	}
-
 	// Filter line + footer keybar.
+	fmt.Fprintln(&b)
 	if m.filtering {
-		fmt.Fprintf(&b, "\n  %s %s\n", c.Accent("filter:"), m.ps.filter+"_")
+		fmt.Fprintf(&b, "  %s %s\n", c.Accent("filter:"), m.ps.filter+"_")
 	}
-	fmt.Fprintln(&b, "\n"+c.Faint(footerKeys))
+	fmt.Fprintln(&b, c.Faint(footerKeys))
+
+	// Bottom status bar — one line: what the focused command is + what it does.
+	if sel := m.ps.selected(); sel != nil {
+		fmt.Fprintln(&b, "  "+m.detailLine(sel))
+	}
 	return b.String()
 }
 
 const footerKeys = "  ↑↓ move · → open · ← back · / filter · ⏎ select · q quit"
 
-// badge returns the focused item's status pill.
-func (m exploreModel) badge(it *paletteItem) string {
+// detailLine is the one-line status bar for the focused item: its full command
+// path, a one-line summary of what it does, and a runnable/needs-args/group
+// badge — truncated to the terminal width so it never wraps.
+func (m exploreModel) detailLine(it *paletteItem) string {
+	c := m.c
+	path := m.crumb() + " " + it.name
+	kind, label := badgeKind(it)
+
+	// Fit the summary into what's left after the path, badge, and separators.
+	budget := c.ruleWidth() - len(path) - (len(label) + 2) - 6
+	summary := it.summary
+	if r := []rune(summary); budget > 1 && len(r) > budget {
+		summary = strings.TrimSpace(string(r[:budget-1])) + "…"
+	}
+
+	line := c.Accent(path)
+	if summary != "" {
+		line += "  " + c.Faint(summary)
+	}
+	return line + "  " + c.Badge(kind, label)
+}
+
+// badgeKind classifies the focused item for its status pill.
+func badgeKind(it *paletteItem) (kind, label string) {
 	switch {
 	case it.parent:
-		return m.c.Badge("info", "group") + " " + m.c.Faint("→ open")
+		return "info", "group"
 	case it.needsArg:
-		return m.c.Badge("warn", "needs args")
+		return "warn", "needs args"
 	default:
-		return m.c.Badge("ok", "runnable")
+		return "ok", "runnable"
 	}
 }
 

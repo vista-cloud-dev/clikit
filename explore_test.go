@@ -85,6 +85,27 @@ func TestExplore_ViewShowsGroupsAndFooter(t *testing.T) {
 	}
 }
 
+func TestExplore_DetailLineIsOneLineWithPathAndSummary(t *testing.T) {
+	m := newTestModel(t) // app "demo", cursor on fmt (help "format")
+	var line string
+	for _, ln := range strings.Split(m.View(), "\n") {
+		if strings.Contains(ln, "demo fmt") {
+			line = ln
+			break
+		}
+	}
+	if line == "" {
+		t.Fatalf("no bottom detail line with the command path; View:\n%s", m.View())
+	}
+	// path AND summary must be on the SAME single line.
+	if !strings.Contains(line, "format") {
+		t.Errorf("detail line missing summary: %q", line)
+	}
+	if !strings.Contains(line, "runnable") {
+		t.Errorf("detail line missing badge: %q", line)
+	}
+}
+
 func TestExplore_QuitNoSelection(t *testing.T) {
 	m := newTestModel(t)
 	m, cmd := upd(m, runes("q"))
