@@ -25,6 +25,7 @@ func Run(name, description string, cli any, g *Globals, extra ...kong.Option) in
 		kong.Description(description),
 		kong.UsageOnError(),
 		kong.ConfigureHelp(kong.HelpOptions{Compact: true, FlagsLast: true}),
+		kong.Help(helpPrinter),
 	}
 	opts = append(opts, extra...)
 
@@ -37,6 +38,16 @@ func Run(name, description string, cli any, g *Globals, extra ...kong.Option) in
 	// Handle shell-completion requests (no-op for normal invocations).
 	kongplete.Complete(parser)
 
+	// Two-tier discovery: a bare invocation shows a compact landing page; an
+	// explicit `help` shows the full grouped surface. (`--help` is handled by
+	// Kong via the custom printer above.)
+	switch args := os.Args[1:]; {
+	case len(args) == 0:
+		return helpExit(emitHelp(os.Stdout, parser.Model, nil, false))
+	case len(args) == 1 && args[0] == "help":
+		return helpExit(emitHelp(os.Stdout, parser.Model, nil, true))
+	}
+
 	kctx, err := parser.Parse(os.Args[1:])
 	if err != nil {
 		RenderError(NewContext(g, ""), Fail(ExitUsage, "USAGE", err.Error(), "run with --help for usage"))
@@ -48,6 +59,15 @@ func Run(name, description string, cli any, g *Globals, extra ...kong.Option) in
 	if err := kctx.Run(cc, parser); err != nil {
 		RenderError(cc, err)
 		return exitOf(err)
+	}
+	return ExitOK
+}
+
+// helpExit maps a help-render error to an exit code (ExitOK on success).
+func helpExit(err error) int {
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return ExitRuntime
 	}
 	return ExitOK
 }

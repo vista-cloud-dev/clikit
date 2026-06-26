@@ -200,6 +200,18 @@ Both are additive and reuse Phase 1's introspection + style foundation.
 
 ---
 
+## 6a. Implementation status (tracker)
+
+| Step | Status | Notes |
+|---|---|---|
+| clikit: styled grouped help renderer (`help.go`) | **DONE** 2026-06-26 | `kong.Help(helpPrinter)`; groups from `group:""` tags; two-tier landing/full |
+| clikit: pager (`pager.go`) | **DONE** 2026-06-26 | `pageThrough` + `$PAGER`/`less -FRX`; `CLIKIT_NO_PAGER` override |
+| clikit: tests + gates | **DONE** 2026-06-26 | `help_test.go`/`pager_test.go`; gofmt/vet/lint/`-race`/govulncheck green; smoke-tested end-to-end |
+| Tag clikit release (e.g. `v0.2.0`) | TODO (user-explicit) | so consumers can pin the new help |
+| Migrate m-cli off vendored `m-cli/clikit/` | TODO | add require + rewrite import in 6 files + delete dir |
+| `group:""` tags + landing sets in m / v / v-pkg | TODO | per repo |
+| Phase 2 (`explore`/`menu`) · Phase 3 (`browser`) | NOT STARTED | sketches in §6 |
+
 ## 7. Risks / open questions
 
 - **Kong help API surface — RESOLVED (verified against kong v1.15.0).** The hook
