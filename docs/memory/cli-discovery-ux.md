@@ -1,6 +1,6 @@
 ---
 name: cli-discovery-ux
-description: clikit Phase 1 — styled, curated, grouped help renderer + pager replacing Kong's stock help for the whole m/v CLI suite. Landed in clikit 2026-06-26; m-cli migration + group tags in m/v still pending.
+description: clikit discovery UX — Phase 1 (styled grouped help + pager, landed across m/v 2026-06-26) and Phase 2 (interactive `explore` Bubbletea palette over the command tree, landed in clikit 2026-06-26). Phase 3 (browser) still a sketch.
 metadata:
   type: project
 ---
@@ -54,5 +54,40 @@ error paths unaffected.
    files, delete the dir, `go mod tidy`, gates.
 3. Add `group:""` tags + curated landing sets in m-cli / v-cli / v-pkg.
 
-Phases 2–3 (Bubbletea `explore`/`menu` palette + `browser` Miller columns) remain
-sketches; both reuse this renderer's `SchemaDoc`/style foundation.
+Phase 3 (`browser` Miller columns) remains a sketch; it reuses this foundation.
+
+---
+
+**Phase 2 — interactive `explore` palette LANDED in clikit (2026-06-26).** A
+Bubbletea TUI over the CLI's own command tree, mounted as the reusable
+`clikit.ExploreCmd` (like `SchemaCmd`/`VersionCmd`) so every tool gets `explore`
+for free. New deps: `github.com/charmbracelet/bubbletea` (+ bubbles family).
+
+- `palette.go` — **pure, TUI-free navigation state** (so it's fully unit-testable):
+  `orderedItems(node)` builds grouped rows from `*kong.Node` (same group-order as
+  the help, untagged → "Commands"), each carrying `parent` (has children → descend)
+  and `needsArg` (has a required positional → not runnable). `paletteState` holds a
+  breadcrumb `stack []*kong.Node` + cursor + filter; methods `move/descend/enter/
+  back/setFilter/selected`.
+- `explore.go` — the Bubbletea `exploreModel` (value model holding a `*paletteState`
+  pointer so cursor survives Bubbletea's value-copy) + `ExploreCmd`. Keys: ↑↓/jk
+  move, →/l descend, ←/h/backspace up, ⏎ select-leaf (or descend), `/` filter, q/esc
+  quit. Detail strip shows summary + a **runnable / needs-args / group badge**.
+  On selecting a leaf it quits and prints that command's help via `emitHelp`.
+- `ExploreCmd.Run(c, k)` uses `interactiveTTY()` (stdin AND stdout TTY); **non-TTY
+  falls back to the full styled help** (verified: `m explore | head` → grouped help,
+  exit 0).
+
+**Why `*kong.Node` not `SchemaDoc`:** the palette needs the `group` tag +
+children + required-positional info; `SchemaDoc` doesn't carry `group`. The live
+Kong model is equally drift-free (it IS the registry), so the palette reads it
+directly. (A future option: add `Group` to `SchemaCommand` for machine consumers.)
+
+**Verification:** unit tests cover navigation (order/clamp/descend/back/leaf-select/
+filter) and the model (down, filter flow, enter-leaf-chooses-and-quits, right-
+descends, View shows groups+footer, q quits) — all green; `make check`
+(vet/lint/`-race`, 38.3% cov) + govulncheck clean. **GOTCHA:** driving the real
+alt-screen TUI through `script` with piped stdin HANGS — don't smoke-test the
+interactive path that way; rely on the unit tests + the non-TTY fallback, and let
+a human try the real terminal. Rollout to m/v (mount `ExploreCmd` + repin) is the
+next step.
