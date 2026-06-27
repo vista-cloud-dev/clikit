@@ -12,16 +12,18 @@ import (
 )
 
 // Explore-palette colors (ANSI / xterm-256 indices so they map to the terminal's
-// own palette): bold-white category names, white command names, and a bold
-// light-blue cursor highlight (whatever the cursor is on). Detail summary is
-// yellow; the [status] tag is green=runnable, gray=group, blue=needs-args.
+// own palette): UPPERCASE bold-gray category names, gray command names, and a
+// bold light-blue cursor highlight (whatever the cursor is on). In the detail
+// line the command path is light blue and the summary light gray; the [status]
+// tag is green=runnable, gray=group, blue=needs-args.
 var (
-	expCat   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15"))  // bold white categories
-	expCmd   = lipgloss.NewStyle().Foreground(lipgloss.Color("15"))             // white commands
+	expCat   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("245")) // bold gray categories (UPPERCASE at render)
+	expCmd   = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))            // gray commands
 	expSel   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("117")) // cursor: bold light blue
-	expInfo  = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))             // yellow detail
+	expPath  = lipgloss.NewStyle().Foreground(lipgloss.Color("117"))            // detail command path: light blue
+	expInfo  = lipgloss.NewStyle().Foreground(lipgloss.Color("250"))            // detail summary: light gray
 	expRun   = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))             // runnable: green
-	expGroup = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))              // group/info: gray
+	expGroup = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))              // [status] badge: gray
 	expNeeds = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))             // not runnable: blue
 )
 
@@ -125,8 +127,8 @@ func (m exploreModel) View() string {
 	// Breadcrumb header.
 	fmt.Fprintln(&b, c.th.title.render(c.Color, m.crumb()))
 
-	// One row per category: a bold-white name (cursor column 0), then its commands
-	// (columns 1..N, white). The cursor — bold light blue with a ▸ pointer — can
+	// One row per category: an UPPERCASE bold-gray name (cursor column 0), then its
+	// commands (columns 1..N, gray). The cursor — bold light blue with a ▸ pointer — can
 	// land on the category name or any command; a trailing → marks a command that
 	// descends. ←→ move within a row, ↑↓ between rows.
 	labelW := 0
@@ -153,7 +155,7 @@ func (m exploreModel) View() string {
 				cmds = append(cmds, paint(c.Color, expCmd, name))
 			}
 		}
-		fmt.Fprintf(&b, "%s%s%s   %s\n", prefix, paint(c.Color, nameStyle, cat.name), pad, strings.Join(cmds, "  "))
+		fmt.Fprintf(&b, "%s%s%s   %s\n", prefix, paint(c.Color, nameStyle, strings.ToUpper(cat.name)), pad, strings.Join(cmds, "  "))
 	}
 	if len(m.ps.cats) == 0 {
 		fmt.Fprintln(&b, c.Faint("  (no matches)"))
@@ -185,15 +187,15 @@ func (m exploreModel) catLine(cat *paletteCat) string {
 	if len(cat.items) == 1 {
 		unit = "command"
 	}
-	return paint(c.Color, expCat, cat.name) + "  " +
+	return paint(c.Color, expCat, strings.ToUpper(cat.name)) + "  " +
 		paint(c.Color, expInfo, cat.desc) + "  " +
 		paint(c.Color, expGroup, fmt.Sprintf("[%d %s]", len(cat.items), unit))
 }
 
 // detailLine is the one-line status bar for the focused item: its full command
-// path (green), a one-line summary of what it does (yellow), and a bracketed
-// [status] tag (green runnable / blue needs-args / gray group) — all on one
-// line, truncated to the terminal width so it never wraps.
+// path (light blue), a one-line summary of what it does (light gray), and a
+// bracketed [status] tag (green runnable / blue needs-args / gray group) — all on
+// one line, truncated to the terminal width so it never wraps.
 func (m exploreModel) detailLine(it *paletteItem) string {
 	c := m.c
 	path := m.crumb() + " " + it.name
@@ -206,7 +208,7 @@ func (m exploreModel) detailLine(it *paletteItem) string {
 		summary = strings.TrimSpace(string(r[:budget-1])) + "…"
 	}
 
-	line := paint(c.Color, expCmd, path)
+	line := paint(c.Color, expPath, path)
 	if summary != "" {
 		line += "  " + paint(c.Color, expInfo, summary)
 	}

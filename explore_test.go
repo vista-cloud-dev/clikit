@@ -85,7 +85,8 @@ func TestExplore_EnterParentDescends(t *testing.T) {
 
 func TestExplore_ViewShowsCategoriesCommandsFooter(t *testing.T) {
 	out := newTestModel(t).View()
-	for _, want := range []string{"Author", "Quality", "fmt", "pkg", "move", "quit"} {
+	// Category names render UPPERCASE in the palette rows.
+	for _, want := range []string{"AUTHOR", "QUALITY", "fmt", "pkg", "move", "quit"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("View missing %q in:\n%s", want, out)
 		}
