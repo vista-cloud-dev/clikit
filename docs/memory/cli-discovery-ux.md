@@ -54,6 +54,29 @@ error paths unaffected.
    files, delete the dir, `go mod tidy`, gates.
 3. Add `group:""` tags + curated landing sets in m-cli / v-cli / v-pkg.
 
+**Phase 2 refinements (2026-06-26, clikit v0.4.0):**
+- **2-D navigation.** Layout is one row per category: the category NAME is cursor
+  **column 0**, its commands are columns 1..N. `←→` move within a row (across name +
+  commands), `↑↓` between category rows (col clamped). `paletteState` is now
+  `{row,col}` not a flat index; `paletteCats()` replaces `orderedItems()` and carries
+  a per-category **description**. `⌫`/Backspace = back, `⏎` = open/run; left/right are
+  no longer back/descend.
+- **Focusable category names.** Landing on a name (col 0) shows "what the category
+  is" in the bottom bar (`catLine`): name + description + `[N commands]`. Descriptions:
+  Kong group Description (ExplicitGroups) → built-in `catBlurb` map → count fallback.
+- **Colors.** Category names bold white; commands **white**; cursor (on name OR
+  command) **bold light blue** (`expSel`, color 117). Detail summary yellow; `[status]`
+  green/blue/gray unchanged.
+- **Compact landing for a bare invocation.** `m`/`v`/`v-pkg` with no args now print a
+  short intro — tagline + one-line-per-category overview + pointers (`help`/`explore`/
+  `<cmd> --help`) — via `writeLanding`, and it is **never paged**. (Before: bare `m`
+  dumped the full grouped list into `less`, requiring `q`.) Full surface is still
+  `<tool> help` / `--help`.
+- **Height-aware paging.** `pageThrough` now pages only when content is **taller than
+  the terminal** (`tallerThanScreen`); short help/landing print directly and return to
+  the prompt — fixes the "stuck in `less`, press q" annoyance (their `$PAGER` lacked
+  quit-if-one-screen).
+
 A once-mooted Phase 3 `browser` (Miller columns) is **rejected as out of scope**:
 Miller columns are for browsing **data** (deep open-ended hierarchies), not a small
 fixed command surface that `explore` already covers. Discovery-UX ends at Phase 2.

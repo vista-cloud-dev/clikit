@@ -25,6 +25,17 @@ func pagerEnabled(noPager bool) bool {
 	return term.IsTerminal(int(os.Stdout.Fd()))
 }
 
+// tallerThanScreen reports whether content has more lines than the terminal is
+// tall. When the size can't be determined, it returns false (don't page) so
+// short output never gets trapped in a pager that won't auto-quit.
+func tallerThanScreen(content string) bool {
+	_, h, err := term.GetSize(int(os.Stdout.Fd()))
+	if err != nil || h <= 0 {
+		return false
+	}
+	return strings.Count(content, "\n")+1 > h
+}
+
 // resolvePager returns the pager command and its arguments: $PAGER when set
 // (split on whitespace), otherwise `less -FRX` (quit if it fits on one screen,
 // keep ANSI color, leave output on screen).
@@ -36,11 +47,12 @@ func resolvePager() (string, []string) {
 	return "less", []string{"-FRX"}
 }
 
-// pageThrough writes content to w directly when paging is disabled, or pipes it
-// through the resolved pager otherwise. If the pager can't be started it falls
+// pageThrough writes content to w directly when paging is disabled or the
+// content already fits on screen, and pipes it through the resolved pager only
+// when it is taller than the terminal. If the pager can't be started it falls
 // back to a direct write, so output is never lost.
 func pageThrough(w io.Writer, content string, enabled bool) error {
-	if !enabled {
+	if !enabled || !tallerThanScreen(content) {
 		_, err := io.WriteString(w, content)
 		return err
 	}

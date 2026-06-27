@@ -14,6 +14,23 @@ func bufCtx(color bool) (*strings.Builder, *Context) {
 	return &b, newRenderContext(&b, color)
 }
 
+func TestEmitHelp_LandingIsCompact(t *testing.T) {
+	var b strings.Builder
+	if err := emitHelp(&b, testApp(t), nil, false); err != nil {
+		t.Fatal(err)
+	}
+	out := b.String()
+	// Compact intro: category names + pointers, but NOT every command.
+	for _, want := range []string{"Author", "Quality", "explore", "demo help"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("landing missing %q in:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "fmt") || strings.Contains(out, "lint") {
+		t.Errorf("landing should NOT list individual commands:\n%s", out)
+	}
+}
+
 func TestWriteRootHelp_PlainNoANSI(t *testing.T) {
 	b, c := bufCtx(false)
 	groups := []helpGroup{

@@ -74,11 +74,23 @@ func helpPrinter(_ kong.HelpOptions, kctx *kong.Context) error {
 }
 
 // emitHelp renders help for app/selected into a buffer (so color is decided by
-// the real terminal, not by the immediate writer) and pages it to w. When
-// selected is nil the root is shown; full toggles the landing vs. full surface.
+// the real terminal, not by the immediate writer) and writes it to w, paging only
+// when the output is taller than the screen.
+//
+//   - bare invocation (selected==nil, !full) → a COMPACT landing intro (never
+//     paged), so a plain `m` lands the user back at the prompt.
+//   - `help`/`--help` at the root or a group → the full grouped surface.
+//   - a leaf command → usage + help + args + flags.
 func emitHelp(w io.Writer, app *kong.Application, selected *kong.Node, full bool) error {
 	var buf strings.Builder
 	c := newRenderContext(&buf, helpColorEnabled())
+
+	if selected == nil && !full {
+		writeLanding(c, app)
+		// The landing is deliberately short — never page it.
+		_, err := io.WriteString(w, buf.String())
+		return err
+	}
 
 	node := app.Node
 	name := app.Name
@@ -88,9 +100,8 @@ func emitHelp(w io.Writer, app *kong.Application, selected *kong.Node, full bool
 	}
 
 	if len(node.Children) > 0 {
-		// A group node (root, or e.g. `pkg`): grouped command listing. A
-		// selected group always shows its full surface.
-		writeRootHelp(c, name, node.Help, groupsFrom(node), globalsOf(app), full || selected != nil)
+		// A group node (root, or e.g. `pkg`): grouped command listing.
+		writeRootHelp(c, name, node.Help, groupsFrom(node), globalsOf(app), true)
 	} else {
 		// A leaf command: usage + help + arguments + flags.
 		usage := app.Name + " " + selected.Summary()
@@ -98,6 +109,28 @@ func emitHelp(w io.Writer, app *kong.Application, selected *kong.Node, full bool
 			cmdArgsOf(selected), cmdFlagsOf(selected, globalKeys(app)))
 	}
 	return pageThrough(w, buf.String(), pagerEnabled(false))
+}
+
+// writeLanding renders the compact intro shown for a bare invocation: the tool's
+// tagline, a one-line overview of each command category (what each area is), and
+// pointers to go deeper. It never lists every command — that's `<tool> help`.
+func writeLanding(c *Context, app *kong.Application) {
+	c.Subtitle(app.Name)
+	if app.Help != "" {
+		fmt.Fprintln(c.Stdout, app.Help)
+	}
+	if cats := paletteCats(app.Node); len(cats) > 0 {
+		fmt.Fprintln(c.Stdout)
+		pairs := make([][2]string, 0, len(cats))
+		for _, cat := range cats {
+			pairs = append(pairs, [2]string{cat.name, cat.desc})
+		}
+		c.KV(pairs...)
+	}
+	fmt.Fprintln(c.Stdout)
+	fmt.Fprintln(c.Stdout, c.Faint(fmt.Sprintf(
+		`Run "%s help" for all commands · "%s explore" to browse · "%s <command> --help" for one.`,
+		app.Name, app.Name, app.Name)))
 }
 
 // groupsFrom buckets a node's command children into helpGroups by their

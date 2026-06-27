@@ -30,111 +30,127 @@ func testApp(t *testing.T) *kong.Application {
 
 func paletteRoot(t *testing.T) *kong.Node { return testApp(t).Node }
 
-func TestOrderedItems_GroupsOrderAndFlags(t *testing.T) {
-	items := orderedItems(paletteRoot(t))
-	names := make([]string, len(items))
-	for i, it := range items {
-		names[i] = it.name
+func TestPaletteCats_OrderItemsAndDesc(t *testing.T) {
+	cats := paletteCats(paletteRoot(t))
+	if len(cats) != 3 {
+		t.Fatalf("want 3 cats, got %d: %+v", len(cats), cats)
 	}
-	// Author(fmt,lint), Quality(test), then untagged Pkg -> "Commands"
-	want := []string{"fmt", "lint", "test", "pkg"}
-	if len(names) != len(want) {
-		t.Fatalf("items = %v, want %v", names, want)
+	if cats[0].name != "Author" || cats[1].name != "Quality" || cats[2].name != ungroupedTitle {
+		t.Fatalf("cat order = %q,%q,%q", cats[0].name, cats[1].name, cats[2].name)
 	}
-	for i := range want {
-		if names[i] != want[i] {
-			t.Fatalf("order = %v, want %v", names, want)
-		}
+	if len(cats[0].items) != 2 || cats[0].items[0].name != "fmt" || cats[0].items[1].name != "lint" {
+		t.Errorf("Author items = %+v", cats[0].items)
 	}
-	byName := map[string]paletteItem{}
-	for _, it := range items {
-		byName[it.name] = it
+	if !cats[2].items[0].parent {
+		t.Error("pkg should be a parent")
 	}
-	if !byName["pkg"].parent {
-		t.Error("pkg should be a parent (has children)")
+	if !cats[1].items[0].needsArg {
+		t.Error("test should need args")
 	}
-	if byName["fmt"].parent {
-		t.Error("fmt should not be a parent")
-	}
-	if !byName["test"].needsArg {
-		t.Error("test should be flagged needsArg (required positional)")
-	}
-	if byName["fmt"].needsArg {
-		t.Error("fmt should not need args")
-	}
-	if byName["pkg"].group != ungroupedTitle {
-		t.Errorf("pkg group = %q, want %q", byName["pkg"].group, ungroupedTitle)
+	if cats[0].desc == "" || cats[2].desc == "" {
+		t.Error("categories should have descriptions")
 	}
 }
 
-func TestPalette_MoveClamps(t *testing.T) {
+func TestPalette_InitialCursorOnFirstCommand(t *testing.T) {
 	ps := newPaletteState(paletteRoot(t))
-	if ps.cursor != 0 {
-		t.Fatalf("cursor0 = %d", ps.cursor)
+	if ps.row != 0 || ps.col != 1 {
+		t.Fatalf("initial cursor = (%d,%d), want (0,1)", ps.row, ps.col)
 	}
-	ps.move(-1)
-	if ps.cursor != 0 {
-		t.Error("up at top should clamp to 0")
+	if it := ps.selectedItem(); it == nil || it.name != "fmt" {
+		t.Fatalf("selectedItem = %v", it)
 	}
-	ps.move(1)
-	if ps.cursor != 1 {
-		t.Errorf("down -> %d", ps.cursor)
+}
+
+func TestPalette_2DMovementAndClamp(t *testing.T) {
+	ps := newPaletteState(paletteRoot(t)) // (0,1) fmt
+	ps.moveRight()                        // (0,2) lint
+	if it := ps.selectedItem(); it == nil || it.name != "lint" {
+		t.Fatalf("after right: %v", ps.selectedItem())
 	}
-	for i := 0; i < 10; i++ {
-		ps.move(1)
+	ps.moveRight() // clamp at maxCol=2
+	if ps.col != 2 {
+		t.Errorf("right past end col=%d", ps.col)
 	}
-	if ps.cursor != len(ps.items)-1 {
-		t.Errorf("down past end -> %d, want %d", ps.cursor, len(ps.items)-1)
+	ps.moveLeft() // fmt
+	ps.moveLeft() // category name (col 0)
+	if !ps.onCategory() || ps.selectedItem() != nil {
+		t.Fatalf("expected on category; col=%d item=%v", ps.col, ps.selectedItem())
+	}
+	if cat := ps.selectedCat(); cat == nil || cat.name != "Author" || cat.desc == "" {
+		t.Fatalf("selectedCat = %+v", ps.selectedCat())
+	}
+	ps.moveLeft() // clamp at 0
+	if ps.col != 0 {
+		t.Errorf("left past start col=%d", ps.col)
+	}
+	// from (0,2) lint, moving down clamps col into Quality (maxCol 1)
+	ps.row, ps.col = 0, 2
+	ps.moveDown()
+	if ps.row != 1 || ps.col != 1 {
+		t.Errorf("down+clamp = (%d,%d), want (1,1)", ps.row, ps.col)
+	}
+	for i := 0; i < 5; i++ {
+		ps.moveDown()
+	}
+	if ps.row != len(ps.cats)-1 {
+		t.Errorf("down past end row=%d", ps.row)
 	}
 }
 
 func TestPalette_DescendAndBack(t *testing.T) {
 	ps := newPaletteState(paletteRoot(t))
-	// move cursor onto "pkg" (last item)
-	for ps.selected() != nil && ps.selected().name != "pkg" {
-		ps.move(1)
+	// move onto pkg (last category, first command)
+	ps.moveDown()
+	ps.moveDown()
+	if it := ps.selectedItem(); it == nil || it.name != "pkg" {
+		t.Fatalf("expected pkg, got %v", ps.selectedItem())
 	}
-	sel, descended := ps.enter()
-	if !descended || sel != nil {
-		t.Fatalf("enter on parent: descended=%v sel=%v", descended, sel)
+	if _, descended := ps.enter(); !descended {
+		t.Fatal("enter on pkg should descend")
 	}
 	if ps.current().Name != "pkg" {
-		t.Fatalf("current = %q, want pkg", ps.current().Name)
+		t.Fatalf("current = %q", ps.current().Name)
 	}
-	got := []string{ps.items[0].name, ps.items[1].name}
-	if got[0] != "parse" || got[1] != "build" {
-		t.Fatalf("pkg children = %v", got)
+	if it := ps.selectedItem(); it == nil || it.name != "parse" {
+		t.Fatalf("after descend selectedItem = %v", ps.selectedItem())
 	}
 	if !ps.back() {
-		t.Fatal("back from pkg should succeed")
+		t.Fatal("back should succeed")
 	}
 	if ps.current().Name == "pkg" {
 		t.Fatal("back did not pop")
 	}
 	if ps.back() {
-		t.Error("back at root should return false")
+		t.Error("back at root should be false")
 	}
 }
 
-func TestPalette_EnterLeafSelects(t *testing.T) {
-	ps := newPaletteState(paletteRoot(t)) // cursor on fmt (leaf)
-	sel, descended := ps.enter()
-	if descended {
-		t.Fatal("leaf enter should not descend")
+func TestPalette_EnterLeafReturnsIt(t *testing.T) {
+	ps := newPaletteState(paletteRoot(t)) // on fmt (leaf)
+	it, descended := ps.enter()
+	if descended || it == nil || it.name != "fmt" {
+		t.Fatalf("enter leaf: it=%v descended=%v", it, descended)
 	}
-	if sel == nil || sel.name != "fmt" {
-		t.Fatalf("selected = %v", sel)
+}
+
+func TestPalette_EnterOnCategoryIsNoop(t *testing.T) {
+	ps := newPaletteState(paletteRoot(t))
+	ps.col = 0 // on the Author category name
+	it, descended := ps.enter()
+	if it != nil || descended {
+		t.Errorf("enter on category should be a no-op; it=%v descended=%v", it, descended)
 	}
 }
 
 func TestPalette_Filter(t *testing.T) {
 	ps := newPaletteState(paletteRoot(t))
 	ps.setFilter("lint")
-	if len(ps.items) != 1 || ps.items[0].name != "lint" {
-		t.Fatalf("filtered = %v", ps.items)
+	if len(ps.cats) != 1 || len(ps.cats[0].items) != 1 || ps.cats[0].items[0].name != "lint" {
+		t.Fatalf("filtered cats = %+v", ps.cats)
 	}
 	ps.setFilter("")
-	if len(ps.items) != 4 {
-		t.Fatalf("cleared filter -> %d items", len(ps.items))
+	if len(ps.cats) != 3 {
+		t.Fatalf("cleared filter -> %d cats", len(ps.cats))
 	}
 }

@@ -11,18 +11,18 @@ import (
 	"golang.org/x/term"
 )
 
-// Explore-palette colors (ANSI 16-color indices so they map to the terminal's
-// own palette): bold-white category headers, green command names, yellow detail
-// summary, and plain bracketed status text — green=runnable, gray=group,
-// blue=needs-args.
+// Explore-palette colors (ANSI / xterm-256 indices so they map to the terminal's
+// own palette): bold-white category names, white command names, and a bold
+// light-blue cursor highlight (whatever the cursor is on). Detail summary is
+// yellow; the [status] tag is green=runnable, gray=group, blue=needs-args.
 var (
-	expCat    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15")) // bold white
-	expCmd    = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))            // green
-	expCmdSel = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("10")) // bold green (cursor)
-	expInfo   = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))            // yellow
-	expRun    = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))            // runnable: green
-	expGroup  = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))             // group/info: gray
-	expNeeds  = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))            // not runnable: blue
+	expCat   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15"))  // bold white categories
+	expCmd   = lipgloss.NewStyle().Foreground(lipgloss.Color("15"))             // white commands
+	expSel   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("117")) // cursor: bold light blue
+	expInfo  = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))             // yellow detail
+	expRun   = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))             // runnable: green
+	expGroup = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))              // group/info: gray
+	expNeeds = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))             // not runnable: blue
 )
 
 // paint renders s with style only when color is on.
@@ -84,13 +84,15 @@ func (m exploreModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.quit = true
 		return m, tea.Quit
 	case tea.KeyUp:
-		m.ps.move(-1)
+		m.ps.moveUp()
 	case tea.KeyDown:
-		m.ps.move(1)
-	case tea.KeyLeft, tea.KeyBackspace:
-		m.ps.back()
+		m.ps.moveDown()
+	case tea.KeyLeft:
+		m.ps.moveLeft()
 	case tea.KeyRight:
-		m.ps.descend()
+		m.ps.moveRight()
+	case tea.KeyBackspace:
+		m.ps.back()
 	case tea.KeyEnter:
 		if sel, descended := m.ps.enter(); !descended && sel != nil {
 			m.chosen = sel.node
@@ -101,14 +103,14 @@ func (m exploreModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "q":
 			m.quit = true
 			return m, tea.Quit
-		case "j":
-			m.ps.move(1)
 		case "k":
-			m.ps.move(-1)
+			m.ps.moveUp()
+		case "j":
+			m.ps.moveDown()
 		case "h":
-			m.ps.back()
+			m.ps.moveLeft()
 		case "l":
-			m.ps.descend()
+			m.ps.moveRight()
 		case "/":
 			m.filtering = true
 		}
@@ -123,52 +125,70 @@ func (m exploreModel) View() string {
 	// Breadcrumb header.
 	fmt.Fprintln(&b, c.th.title.render(c.Color, m.crumb()))
 
-	// One line per category: a bold-white label (aligned), then that category's
-	// commands inline (green; bold green + ▸ pointer under the cursor; a trailing →
-	// marks a command that descends).
+	// One row per category: a bold-white name (cursor column 0), then its commands
+	// (columns 1..N, white). The cursor — bold light blue with a ▸ pointer — can
+	// land on the category name or any command; a trailing → marks a command that
+	// descends. ←→ move within a row, ↑↓ between rows.
 	labelW := 0
-	for _, it := range m.ps.items {
-		if len(it.group) > labelW {
-			labelW = len(it.group)
+	for _, cat := range m.ps.cats {
+		if len(cat.name) > labelW {
+			labelW = len(cat.name)
 		}
 	}
-	for i := 0; i < len(m.ps.items); {
-		group := m.ps.items[i].group
-		pad := strings.Repeat(" ", labelW-len(group))
+	for r, cat := range m.ps.cats {
+		prefix, nameStyle := "  ", expCat
+		if r == m.ps.row && m.ps.col == 0 {
+			prefix, nameStyle = paint(c.Color, expSel, c.gl.Title)+" ", expSel
+		}
+		pad := strings.Repeat(" ", labelW-len(cat.name))
 		var cmds []string
-		for i < len(m.ps.items) && m.ps.items[i].group == group {
-			it := m.ps.items[i]
+		for i, it := range cat.items {
 			name := it.name
 			if it.parent {
 				name += c.gl.Arrow
 			}
-			if i == m.ps.cursor {
-				cmds = append(cmds, paint(c.Color, expCmdSel, c.gl.Title+name))
+			if r == m.ps.row && m.ps.col == i+1 {
+				cmds = append(cmds, paint(c.Color, expSel, c.gl.Title+name))
 			} else {
 				cmds = append(cmds, paint(c.Color, expCmd, name))
 			}
-			i++
 		}
-		fmt.Fprintf(&b, "  %s%s   %s\n", paint(c.Color, expCat, group), pad, strings.Join(cmds, "  "))
+		fmt.Fprintf(&b, "%s%s%s   %s\n", prefix, paint(c.Color, nameStyle, cat.name), pad, strings.Join(cmds, "  "))
 	}
-	if len(m.ps.items) == 0 {
-		fmt.Fprintln(&b, c.Faint("    (no matches)"))
+	if len(m.ps.cats) == 0 {
+		fmt.Fprintln(&b, c.Faint("  (no matches)"))
 	}
 
 	// Bottom: a blank, optional filter line, the one-line detail (command path +
-	// what it does + a [status] tag), then the keybar — detail and keybar adjacent.
+	// what it does, or — on a category name — what the category is), then the
+	// keybar.
 	fmt.Fprintln(&b)
 	if m.filtering {
 		fmt.Fprintf(&b, "  %s %s\n", c.Accent("filter:"), m.ps.filter+"_")
 	}
-	if sel := m.ps.selected(); sel != nil {
-		fmt.Fprintln(&b, "  "+m.detailLine(sel))
+	if it := m.ps.selectedItem(); it != nil {
+		fmt.Fprintln(&b, "  "+m.detailLine(it))
+	} else if cat := m.ps.selectedCat(); cat != nil {
+		fmt.Fprintln(&b, "  "+m.catLine(cat))
 	}
 	fmt.Fprintln(&b, c.Faint(footerKeys))
 	return b.String()
 }
 
-const footerKeys = "  ↑↓ move · → open · ← back · / filter · ⏎ select · q quit"
+const footerKeys = "  ←↑↓→ move · ⏎ open/run · ⌫ back · / filter · q quit"
+
+// catLine is the one-line status bar when the cursor is on a category name: the
+// name, what the category is, and its command count.
+func (m exploreModel) catLine(cat *paletteCat) string {
+	c := m.c
+	unit := "commands"
+	if len(cat.items) == 1 {
+		unit = "command"
+	}
+	return paint(c.Color, expCat, cat.name) + "  " +
+		paint(c.Color, expInfo, cat.desc) + "  " +
+		paint(c.Color, expGroup, fmt.Sprintf("[%d %s]", len(cat.items), unit))
+}
 
 // detailLine is the one-line status bar for the focused item: its full command
 // path (green), a one-line summary of what it does (yellow), and a bracketed

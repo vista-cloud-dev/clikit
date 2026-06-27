@@ -1,71 +1,73 @@
 package clikit
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/alecthomas/kong"
 )
 
 // This file is the pure navigation state for the interactive `explore` palette
-// (Phase 2 of the discovery UX). It has no TUI dependency, so the whole
-// navigation model — grouping, cursor movement, descend/ascend, filtering — is
+// (Phase 2). It has no TUI dependency, so the whole 2-D navigation model —
+// categories, items, cursor movement across both, descend/ascend, filtering — is
 // unit-testable. explore.go wraps it in a Bubbletea model. See
 // docs/proposals/cli-discovery-ux.md §6.
+//
+// Layout is one row per category: a category NAME (cursor column 0) followed by
+// its commands (columns 1..N). The cursor is a (row, col) pair: ←→ move within a
+// row across [name, cmd1, cmd2, …]; ↑↓ move between category rows. Landing on a
+// category name (col 0) shows what the category is; landing on a command shows
+// what that command does.
 
-// paletteItem is one selectable row: the command node plus the display facts the
-// palette needs (its editorial group, whether it descends, whether it needs an
-// argument before it can run).
+// ungroupedTitle (the "Commands" bucket for untagged commands) is declared in
+// help.go and shared here.
+
+// paletteItem is one command cell.
 type paletteItem struct {
 	node     *kong.Node
-	group    string
 	name     string
 	summary  string
-	parent   bool // has subcommands -> Enter/Right descends
+	parent   bool // has subcommands -> Enter descends
 	needsArg bool // has a required positional -> not runnable as-is
 }
 
-// orderedItems flattens a node's command children into rows, grouped by their
-// `group:""` tag in first-seen order with untagged commands in a trailing
-// "Commands" bucket — the same ordering the styled help uses.
-func orderedItems(node *kong.Node) []paletteItem {
-	idx := map[string]int{}
-	buckets := [][]paletteItem{}
-	var ungrouped []paletteItem
+// paletteCat is one category row: a name, a description (what the category is),
+// and its command cells.
+type paletteCat struct {
+	name  string
+	desc  string
+	items []paletteItem
+}
 
-	for _, ch := range node.Children {
-		if ch.Type != kong.CommandNode || ch.Hidden {
-			continue
-		}
-		it := paletteItem{
-			node: ch, name: ch.Name, summary: ch.Help,
-			parent: len(ch.Children) > 0, needsArg: hasRequiredArg(ch),
-		}
-		title := ""
-		if ch.Group != nil {
-			if title = ch.Group.Title; title == "" {
-				title = ch.Group.Key
-			}
-		}
-		if title == "" {
-			it.group = ungroupedTitle
-			ungrouped = append(ungrouped, it)
-			continue
-		}
-		it.group = title
-		i, seen := idx[title]
-		if !seen {
-			idx[title] = len(buckets)
-			buckets = append(buckets, nil)
-			i = len(buckets) - 1
-		}
-		buckets[i] = append(buckets[i], it)
-	}
+// catBlurb describes the editorial categories the toolchain ships, so a category
+// name is meaningful on focus. A Kong group Description (via kong.ExplicitGroups)
+// overrides it; an unknown category falls back to a command count.
+var catBlurb = map[string]string{
+	"Author":          "Write and check M source.",
+	"Quality":         "Test, cover, and check the code.",
+	"Engine":          "Reach a live engine.",
+	"Sync":            "Move routines and builds between server and disk.",
+	"Introspect":      "Inspect the tool itself.",
+	"Domains":         "VistA subsystem tool domains.",
+	"Scaffold":        "Generate new tool / domain skeletons.",
+	"Inspect":         "Examine a build without changing it.",
+	"Transform":       "Decompose, assemble, and canonicalize builds.",
+	"Build & install": "Build and install on a live engine.",
+	"Back-out":        "Snapshot and reverse an install.",
+	ungroupedTitle:    "Other commands.",
+}
 
-	var out []paletteItem
-	for _, b := range buckets {
-		out = append(out, b...)
+func catDescription(name, kongDesc string, n int) string {
+	switch {
+	case kongDesc != "":
+		return kongDesc
+	case catBlurb[name] != "":
+		return catBlurb[name]
+	case n == 1:
+		return "1 command"
+	default:
+		return fmt.Sprintf("%d commands", n)
 	}
-	return append(out, ungrouped...)
 }
 
 func hasRequiredArg(n *kong.Node) bool {
@@ -77,91 +79,203 @@ func hasRequiredArg(n *kong.Node) bool {
 	return false
 }
 
-// paletteState tracks a breadcrumb stack of nodes and a cursor over the current
-// node's (optionally filtered) items.
+// paletteCats groups a node's command children into ordered categories (by group
+// tag, first-seen order; untagged -> trailing "Commands"), each with a
+// description.
+func paletteCats(node *kong.Node) []paletteCat {
+	idx := map[string]int{}
+	var cats []paletteCat
+	var ungrouped []paletteItem
+
+	for _, ch := range node.Children {
+		if ch.Type != kong.CommandNode || ch.Hidden {
+			continue
+		}
+		it := paletteItem{
+			node: ch, name: ch.Name, summary: ch.Help,
+			parent: len(ch.Children) > 0, needsArg: hasRequiredArg(ch),
+		}
+		title, desc := "", ""
+		if ch.Group != nil {
+			if title = ch.Group.Title; title == "" {
+				title = ch.Group.Key
+			}
+			desc = ch.Group.Description
+		}
+		if title == "" {
+			ungrouped = append(ungrouped, it)
+			continue
+		}
+		i, seen := idx[title]
+		if !seen {
+			idx[title] = len(cats)
+			cats = append(cats, paletteCat{name: title, desc: desc})
+			i = len(cats) - 1
+		}
+		cats[i].items = append(cats[i].items, it)
+	}
+	if len(ungrouped) > 0 {
+		cats = append(cats, paletteCat{name: ungroupedTitle, items: ungrouped})
+	}
+	for i := range cats {
+		cats[i].desc = catDescription(cats[i].name, cats[i].desc, len(cats[i].items))
+	}
+	return cats
+}
+
+// paletteState tracks a breadcrumb stack of nodes and a 2-D cursor (row over
+// categories, col over [name, items…]) on the current node, plus a filter.
 type paletteState struct {
-	stack  []*kong.Node // stack[0] = root; last element = current node
-	cursor int
+	stack  []*kong.Node // stack[0] = root; last = current
+	cats   []paletteCat
+	row    int
+	col    int // 0 = category name; 1..len(items) = item (col-1)
 	filter string
-	items  []paletteItem // current node's items after filtering
 }
 
 func newPaletteState(root *kong.Node) *paletteState {
 	ps := &paletteState{stack: []*kong.Node{root}}
 	ps.rebuild()
+	ps.gotoFirstItem()
 	return ps
 }
 
 func (ps *paletteState) current() *kong.Node { return ps.stack[len(ps.stack)-1] }
 
-// rebuild recomputes the visible items for the current node + filter, clamping
-// the cursor into range.
+// rebuild recomputes categories for the current node + filter, then clamps the
+// cursor.
 func (ps *paletteState) rebuild() {
-	items := orderedItems(ps.current())
+	cats := paletteCats(ps.current())
 	if ps.filter != "" {
 		f := strings.ToLower(ps.filter)
-		kept := items[:0:0]
-		for _, it := range items {
-			if strings.Contains(strings.ToLower(it.name), f) ||
-				strings.Contains(strings.ToLower(it.summary), f) {
-				kept = append(kept, it)
+		var kept []paletteCat
+		for _, c := range cats {
+			var items []paletteItem
+			for _, it := range c.items {
+				if strings.Contains(strings.ToLower(it.name), f) ||
+					strings.Contains(strings.ToLower(it.summary), f) {
+					items = append(items, it)
+				}
+			}
+			if len(items) > 0 {
+				c.items = items
+				kept = append(kept, c)
 			}
 		}
-		items = kept
+		cats = kept
 	}
-	ps.items = items
-	if ps.cursor >= len(items) {
-		ps.cursor = max(0, len(items)-1)
+	ps.cats = cats
+	ps.clamp()
+}
+
+func (ps *paletteState) maxCol() int {
+	if len(ps.cats) == 0 {
+		return 0
 	}
-	if ps.cursor < 0 {
-		ps.cursor = 0
+	return len(ps.cats[ps.row].items)
+}
+
+func (ps *paletteState) clamp() {
+	if ps.row < 0 {
+		ps.row = 0
+	}
+	if ps.row >= len(ps.cats) {
+		ps.row = max(0, len(ps.cats)-1)
+	}
+	if ps.col < 0 {
+		ps.col = 0
+	}
+	if mc := ps.maxCol(); ps.col > mc {
+		ps.col = mc
 	}
 }
 
-// selected returns the item under the cursor, or nil when the list is empty.
-func (ps *paletteState) selected() *paletteItem {
-	if ps.cursor < 0 || ps.cursor >= len(ps.items) {
+// gotoFirstItem parks the cursor on the first command (or the first category
+// name if the first category is empty).
+func (ps *paletteState) gotoFirstItem() {
+	ps.row = 0
+	if len(ps.cats) > 0 && len(ps.cats[0].items) > 0 {
+		ps.col = 1
+	} else {
+		ps.col = 0
+	}
+}
+
+func (ps *paletteState) moveUp() {
+	if ps.row > 0 {
+		ps.row--
+		ps.clamp()
+	}
+}
+
+func (ps *paletteState) moveDown() {
+	if ps.row < len(ps.cats)-1 {
+		ps.row++
+		ps.clamp()
+	}
+}
+
+func (ps *paletteState) moveLeft() {
+	if ps.col > 0 {
+		ps.col--
+	}
+}
+
+func (ps *paletteState) moveRight() {
+	if ps.col < ps.maxCol() {
+		ps.col++
+	}
+}
+
+// onCategory reports whether the cursor is on a category name (col 0).
+func (ps *paletteState) onCategory() bool { return ps.col == 0 }
+
+// selectedCat returns the category under the cursor (nil if the list is empty).
+func (ps *paletteState) selectedCat() *paletteCat {
+	if len(ps.cats) == 0 {
 		return nil
 	}
-	return &ps.items[ps.cursor]
+	return &ps.cats[ps.row]
 }
 
-// move shifts the cursor by delta, clamped to the list bounds.
-func (ps *paletteState) move(delta int) {
-	ps.cursor += delta
-	if ps.cursor < 0 {
-		ps.cursor = 0
+// selectedItem returns the command under the cursor, or nil when on a category
+// name or when the list is empty.
+func (ps *paletteState) selectedItem() *paletteItem {
+	if len(ps.cats) == 0 || ps.col == 0 {
+		return nil
 	}
-	if ps.cursor >= len(ps.items) {
-		ps.cursor = max(0, len(ps.items)-1)
+	c := &ps.cats[ps.row]
+	if ps.col-1 >= len(c.items) {
+		return nil
 	}
+	return &c.items[ps.col-1]
 }
 
-// descend pushes into the selected item when it is a parent. Returns false if
-// the selection isn't a descendable command.
+// descend pushes into the selected command when it is a parent.
 func (ps *paletteState) descend() bool {
-	sel := ps.selected()
-	if sel == nil || !sel.parent {
+	it := ps.selectedItem()
+	if it == nil || !it.parent {
 		return false
 	}
-	ps.stack = append(ps.stack, sel.node)
-	ps.cursor, ps.filter = 0, ""
+	ps.stack = append(ps.stack, it.node)
+	ps.filter = ""
 	ps.rebuild()
+	ps.gotoFirstItem()
 	return true
 }
 
-// enter descends into a parent (returning descended=true) or returns the
-// selected leaf for the caller to act on (descended=false).
+// enter descends into a parent command (descended=true) or returns the selected
+// leaf (descended=false). On a category name it is a no-op (nil, false).
 func (ps *paletteState) enter() (*paletteItem, bool) {
-	sel := ps.selected()
-	if sel == nil {
+	it := ps.selectedItem()
+	if it == nil {
 		return nil, false
 	}
-	if sel.parent {
+	if it.parent {
 		ps.descend()
 		return nil, true
 	}
-	return sel, false
+	return it, false
 }
 
 // back pops one level. Returns false at the root.
@@ -170,14 +284,15 @@ func (ps *paletteState) back() bool {
 		return false
 	}
 	ps.stack = ps.stack[:len(ps.stack)-1]
-	ps.cursor, ps.filter = 0, ""
+	ps.filter = ""
 	ps.rebuild()
+	ps.gotoFirstItem()
 	return true
 }
 
-// setFilter replaces the filter text and recomputes the visible items.
+// setFilter replaces the filter text and recomputes the visible categories.
 func (ps *paletteState) setFilter(s string) {
 	ps.filter = s
-	ps.cursor = 0
 	ps.rebuild()
+	ps.gotoFirstItem()
 }
