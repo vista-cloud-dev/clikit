@@ -37,7 +37,7 @@ func paint(color bool, st lipgloss.Style, s string) string {
 // the CLI's own command tree. You arrow through editorial groups and commands,
 // read a detail strip on focus (with a runnable/needs-args badge), descend into
 // sub-domains, fuzzy-filter, and select a command. It is mounted as the reusable
-// ExploreCmd, so every tool in the toolchain gets `explore` for free. The
+// MenuCmd, so every tool in the toolchain gets `menu` for free. The
 // navigation logic lives in palette.go (pure, testable); this file is rendering +
 // key handling. See docs/proposals/cli-discovery-ux.md §6.
 
@@ -239,22 +239,22 @@ func (m exploreModel) crumb() string {
 	return strings.Join(parts, " ")
 }
 
-// ExploreCmd is the reusable `explore` subcommand: an interactive palette over
-// the tool's own command tree. Embed it in any CLI:
+// MenuCmd is the reusable `menu` subcommand: an interactive palette over the
+// tool's own command tree. Embed it in any CLI:
 //
-//	Explore clikit.ExploreCmd `cmd:"" help:"Browse commands interactively."`
+//	Menu clikit.MenuCmd `cmd:"" help:"Browse commands interactively."`
 //
 // On a non-interactive stdout it falls back to the full styled help.
-type ExploreCmd struct{}
+type MenuCmd struct{}
 
 // Run launches the palette. clikit.Run binds the *kong.Kong.
-func (ExploreCmd) Run(c *Context, k *kong.Kong) error {
+func (MenuCmd) Run(c *Context, k *kong.Kong) error {
 	if !interactiveTTY() {
 		return emitHelp(os.Stdout, k.Model, nil, true)
 	}
 	final, err := tea.NewProgram(newExploreModel(c, k.Model), tea.WithAltScreen()).Run()
 	if err != nil {
-		return Fail(ExitRuntime, "EXPLORE_FAILED", err.Error(), "")
+		return Fail(ExitRuntime, "MENU_FAILED", err.Error(), "")
 	}
 	if fm, ok := final.(exploreModel); ok && fm.chosen != nil {
 		return emitHelp(os.Stdout, k.Model, fm.chosen, true)

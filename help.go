@@ -129,7 +129,7 @@ func writeLanding(c *Context, app *kong.Application) {
 	}
 	fmt.Fprintln(c.Stdout)
 	fmt.Fprintln(c.Stdout, c.Faint(fmt.Sprintf(
-		`Run "%s help" for all commands · "%s explore" to browse · "%s <command> --help" for one.`,
+		`Run "%s help" for all commands · "%s menu" to browse · "%s <command> --help" for one.`,
 		app.Name, app.Name, app.Name)))
 }
 

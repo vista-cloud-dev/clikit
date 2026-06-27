@@ -21,7 +21,7 @@ func TestEmitHelp_LandingIsCompact(t *testing.T) {
 	}
 	out := b.String()
 	// Compact intro: category names + pointers, but NOT every command.
-	for _, want := range []string{"Author", "Quality", "explore", "demo help"} {
+	for _, want := range []string{"Author", "Quality", "menu", "demo help"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("landing missing %q in:\n%s", want, out)
 		}
