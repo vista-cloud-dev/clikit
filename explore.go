@@ -123,25 +123,33 @@ func (m exploreModel) View() string {
 	// Breadcrumb header.
 	fmt.Fprintln(&b, c.th.title.render(c.Color, m.crumb()))
 
-	// Grouped list with a cursor pointer; bold-white headers print when the group
-	// changes; command names are green (bold green under the cursor).
-	prevGroup := ""
-	for i, it := range m.ps.items {
-		if it.group != prevGroup {
-			fmt.Fprintln(&b, "  "+paint(c.Color, expCat, it.group))
-			prevGroup = it.group
+	// One line per category: a bold-white label (aligned), then that category's
+	// commands inline (green; bold green + ▸ pointer under the cursor; a trailing →
+	// marks a command that descends).
+	labelW := 0
+	for _, it := range m.ps.items {
+		if len(it.group) > labelW {
+			labelW = len(it.group)
 		}
-		marker := "  "
-		nameStyle := expCmd
-		if i == m.ps.cursor {
-			marker = paint(c.Color, expCmdSel, c.gl.Arrow) + " "
-			nameStyle = expCmdSel
+	}
+	for i := 0; i < len(m.ps.items); {
+		group := m.ps.items[i].group
+		pad := strings.Repeat(" ", labelW-len(group))
+		var cmds []string
+		for i < len(m.ps.items) && m.ps.items[i].group == group {
+			it := m.ps.items[i]
+			name := it.name
+			if it.parent {
+				name += c.gl.Arrow
+			}
+			if i == m.ps.cursor {
+				cmds = append(cmds, paint(c.Color, expCmdSel, c.gl.Title+name))
+			} else {
+				cmds = append(cmds, paint(c.Color, expCmd, name))
+			}
+			i++
 		}
-		suffix := ""
-		if it.parent {
-			suffix = " " + paint(c.Color, expGroup, c.gl.Arrow)
-		}
-		fmt.Fprintf(&b, "    %s%s%s\n", marker, paint(c.Color, nameStyle, it.name), suffix)
+		fmt.Fprintf(&b, "  %s%s   %s\n", paint(c.Color, expCat, group), pad, strings.Join(cmds, "  "))
 	}
 	if len(m.ps.items) == 0 {
 		fmt.Fprintln(&b, c.Faint("    (no matches)"))
