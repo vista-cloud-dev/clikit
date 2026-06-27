@@ -77,6 +77,21 @@ error paths unaffected.
   the prompt — fixes the "stuck in `less`, press q" annoyance (their `$PAGER` lacked
   quit-if-one-screen).
 
+**Renamed `explore` → `menu` (2026-06-26, clikit v0.5.0).** The interactive
+palette subcommand is now `menu`: clikit type `ExploreCmd` → **`MenuCmd`** (error
+code `EXPLORE_FAILED` → `MENU_FAILED`); the landing pointer now reads `"<tool>
+menu" to browse`. Consumers mount it as `Menu clikit.MenuCmd` (field name → Kong
+command name). Rolled out the same increment: clikit v0.5.0 tagged, then m-cli /
+v-cli / v-pkg / v-rpc each repinned clikit v0.5.0 + renamed the field. The rename
+is API-breaking for the type name, but safe across the v suite because the menu
+command lives only in each repo's `main.go` (never in the imported `pkgcli`/
+`rpccli` packages), so MVS upgrading clikit to v0.5.0 for the umbrella build never
+hits a dangling `ExploreCmd` reference. Internal identifiers (`exploreModel`,
+`expCat` styles, `explore.go`) were left as-is — invisible. Below this line,
+"explore" is the historical name.
+
+---
+
 A once-mooted Phase 3 `browser` (Miller columns) is **rejected as out of scope**:
 Miller columns are for browsing **data** (deep open-ended hierarchies), not a small
 fixed command surface that `explore` already covers. Discovery-UX ends at Phase 2.
