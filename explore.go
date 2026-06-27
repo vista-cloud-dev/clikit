@@ -194,15 +194,15 @@ func (m exploreModel) catLine(cat *paletteCat) string {
 
 // detailLine is the one-line status bar for the focused item: its full command
 // path (light blue), a one-line summary of what it does (light gray), and a
-// bracketed [status] tag (green runnable / blue needs-args / gray group) — all on
+// status badge (green ▶ runnable / blue [needs args] / gray [group]) — all on
 // one line, truncated to the terminal width so it never wraps.
 func (m exploreModel) detailLine(it *paletteItem) string {
 	c := m.c
 	path := m.crumb() + " " + it.name
-	label, st := badgeFor(it)
+	badge, st := badgeFor(it)
 
-	// Fit the summary into what's left after the path, "[label]", and separators.
-	budget := c.ruleWidth() - len(path) - (len(label) + 2) - 6
+	// Fit the summary into what's left after the path, the badge, and separators.
+	budget := c.ruleWidth() - len(path) - (len([]rune(badge)) + 2) - 6
 	summary := it.summary
 	if r := []rune(summary); budget > 1 && len(r) > budget {
 		summary = strings.TrimSpace(string(r[:budget-1])) + "…"
@@ -212,19 +212,19 @@ func (m exploreModel) detailLine(it *paletteItem) string {
 	if summary != "" {
 		line += "  " + paint(c.Color, expInfo, summary)
 	}
-	return line + "  " + paint(c.Color, st, "["+label+"]")
+	return line + "  " + paint(c.Color, st, badge)
 }
 
-// badgeFor returns the focused item's status label and color: runnable (green),
-// needs-args (blue), or group (gray).
-func badgeFor(it *paletteItem) (label string, st lipgloss.Style) {
+// badgeFor returns the focused item's status token and color: a ▶ glyph for a
+// runnable leaf (green), or a bracketed [needs args] (blue) / [group] (gray) tag.
+func badgeFor(it *paletteItem) (badge string, st lipgloss.Style) {
 	switch {
 	case it.parent:
-		return "group", expGroup
+		return "[group]", expGroup
 	case it.needsArg:
-		return "needs args", expNeeds
+		return "[needs args]", expNeeds
 	default:
-		return "runnable", expRun
+		return "▶", expRun
 	}
 }
 

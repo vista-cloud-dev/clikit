@@ -102,7 +102,8 @@ func TestExplore_CommandDetailLine(t *testing.T) {
 			break
 		}
 	}
-	if line == "" || !strings.Contains(line, "format") || !strings.Contains(line, "runnable") {
+	// A runnable leaf shows the ▶ glyph (not a [runnable] text badge).
+	if line == "" || !strings.Contains(line, "format") || !strings.Contains(line, "▶") {
 		t.Errorf("command detail line wrong: %q", line)
 	}
 }
