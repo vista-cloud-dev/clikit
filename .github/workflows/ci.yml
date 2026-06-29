@@ -1,0 +1,18 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# clikit is a shared library (package clikit) consumed by go-cli-template and the
+# v/m CLIs — it earns the same go-ci gate as its consumers: lint (canonical
+# golangci config, drift-gated) + race-tested coverage + the cross-compile matrix.
+# No `schema` command (library, not a binary) and no waterline layer (it's a
+# layerless toolkit, neither m nor v), so schema-check is off and there is no
+# arch-waterline job.
+jobs:
+  ci:
+    uses: vista-cloud-dev/.github/.github/workflows/go-ci.yml@main
+    with:
+      schema-check: false
