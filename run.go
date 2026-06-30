@@ -1,6 +1,7 @@
 package clikit
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -50,7 +51,17 @@ func Run(name, description string, cli any, g *Globals, extra ...kong.Option) in
 
 	kctx, err := parser.Parse(os.Args[1:])
 	if err != nil {
-		RenderError(NewContext(g, ""), Fail(ExitUsage, "USAGE", err.Error(), "run with --help for usage"))
+		cc := NewContext(g, "")
+		// When the user names a command but leaves out its required arguments
+		// (or its subcommand), answer with that verb's help — the terse "expected
+		// <arg>" line alone doesn't show what the command actually wants. JSON
+		// mode keeps the structured error so machine consumers are unaffected.
+		if node := usageHelpNode(err, cc.Format); node != nil {
+			RenderError(cc, Fail(ExitUsage, "USAGE", err.Error(), ""))
+			_ = emitHelp(os.Stdout, parser.Model, node, true)
+			return ExitUsage
+		}
+		RenderError(cc, Fail(ExitUsage, "USAGE", err.Error(), "run with --help for usage"))
 		return ExitUsage
 	}
 
@@ -61,6 +72,27 @@ func Run(name, description string, cli any, g *Globals, extra ...kong.Option) in
 		return exitOf(err)
 	}
 	return ExitOK
+}
+
+// usageHelpNode decides whether a parse error should be answered with a
+// command's help rather than the terse structured usage error. It returns that
+// command node only when both hold: the output is human-facing (not JSON), and
+// the error resolved to a specific named command — i.e. the user typed a verb
+// that needs more input. Otherwise it returns nil and Run falls back to the
+// structured error (JSON consumers, unknown commands, root-level flag errors).
+func usageHelpNode(err error, format OutputFormat) *kong.Node {
+	if format == FormatJSON {
+		return nil
+	}
+	var pe *kong.ParseError
+	if !errors.As(err, &pe) || pe.Context == nil {
+		return nil
+	}
+	sel := pe.Context.Selected()
+	if sel == nil || sel.Type != kong.CommandNode {
+		return nil
+	}
+	return sel
 }
 
 // helpExit maps a help-render error to an exit code (ExitOK on success).
