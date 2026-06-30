@@ -87,15 +87,59 @@ func TestWriteCommandHelp_Plain(t *testing.T) {
 	b, c := bufCtx(false)
 	writeCommandHelp(c, "m fmt [flags] <file>", "Format M code.", "",
 		[]SchemaArg{{Name: "file", Help: "file to format"}},
-		[]SchemaFlag{{Name: "write", Help: "write in place"}})
+		[]SchemaFlag{{Name: "write", Help: "write in place"}}, "")
 	out := b.String()
 	for _, want := range []string{"Usage:", "m fmt", "Format M code.", "file", "write"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in:\n%s", want, out)
 		}
 	}
+	if strings.Contains(out, "Example") {
+		t.Error("no example given, but an Example section was rendered")
+	}
 	if strings.Contains(out, "\x1b") {
 		t.Error("ANSI leak")
+	}
+}
+
+func TestWriteCommandHelp_Example(t *testing.T) {
+	b, c := bufCtx(false)
+	writeCommandHelp(c, "v rpc-debug tail [flags]", "Stream RPCs.", "", nil, nil,
+		"v rpc-debug tail --container vehu")
+	out := b.String()
+	for _, want := range []string{"Example", "v rpc-debug tail --container vehu"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+}
+
+// The example:"" tag survives onto the command node and emitHelp renders it.
+func TestEmitHelp_ExampleFromTag(t *testing.T) {
+	var cli struct {
+		Tail struct {
+			Container string `help:"container"`
+		} `cmd:"" help:"stream" example:"demo tail --container vehu"`
+	}
+	k, err := kong.New(&cli, kong.Name("demo"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var node *kong.Node
+	for _, n := range k.Model.Node.Children {
+		if n.Name == "tail" {
+			node = n
+		}
+	}
+	if node == nil {
+		t.Fatal("tail node not found")
+	}
+	var b strings.Builder
+	if err := emitHelp(&b, k.Model, node, true); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(b.String(), "demo tail --container vehu") {
+		t.Errorf("example not rendered:\n%s", b.String())
 	}
 }
 

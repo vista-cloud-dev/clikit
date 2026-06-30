@@ -103,10 +103,10 @@ func emitHelp(w io.Writer, app *kong.Application, selected *kong.Node, full bool
 		// A group node (root, or e.g. `pkg`): grouped command listing.
 		writeRootHelp(c, name, node.Help, groupsFrom(node), globalsOf(app), true)
 	} else {
-		// A leaf command: usage + help + arguments + flags.
+		// A leaf command: usage + help + arguments + flags + example.
 		usage := app.Name + " " + selected.Summary()
 		writeCommandHelp(c, usage, selected.Help, selected.Detail,
-			cmdArgsOf(selected), cmdFlagsOf(selected, globalKeys(app)))
+			cmdArgsOf(selected), cmdFlagsOf(selected, globalKeys(app)), exampleOf(selected))
 	}
 	return pageThrough(w, buf.String(), pagerEnabled(false))
 }
@@ -202,6 +202,16 @@ func cmdFlagsOf(cmd *kong.Node, globals map[string]bool) []SchemaFlag {
 	return out
 }
 
+// exampleOf returns a command's `example:""` tag — a ready-to-run invocation
+// shown in its help (and in the help printed on a usage error). Empty when the
+// command declares none.
+func exampleOf(cmd *kong.Node) string {
+	if cmd.Tag == nil {
+		return ""
+	}
+	return cmd.Tag.Get("example")
+}
+
 // cmdArgsOf returns a command's positional arguments.
 func cmdArgsOf(cmd *kong.Node) []SchemaArg {
 	var out []SchemaArg
@@ -243,8 +253,8 @@ func writeRootHelp(c *Context, name, summary string, groups []helpGroup, globals
 }
 
 // writeCommandHelp renders a leaf command: usage, help/detail prose, arguments,
-// and flags.
-func writeCommandHelp(c *Context, usage, help, detail string, args []SchemaArg, flags []SchemaFlag) {
+// flags, and — when declared — a ready-to-run example.
+func writeCommandHelp(c *Context, usage, help, detail string, args []SchemaArg, flags []SchemaFlag, example string) {
 	fmt.Fprintf(c.Stdout, "%s %s\n", c.Muted("Usage:"), usage)
 	if help != "" {
 		fmt.Fprintln(c.Stdout)
@@ -267,6 +277,11 @@ func writeCommandHelp(c *Context, usage, help, detail string, args []SchemaArg, 
 		fmt.Fprintln(c.Stdout)
 		c.Title("Flags")
 		writeFlags(c, flags)
+	}
+	if example != "" {
+		fmt.Fprintln(c.Stdout)
+		c.Title("Example")
+		fmt.Fprintln(c.Stdout, "  "+c.Accent(example))
 	}
 }
 
