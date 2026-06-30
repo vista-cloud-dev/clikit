@@ -65,6 +65,27 @@ func TestUsageHelpNode_MissingSubcommand(t *testing.T) {
 	}
 }
 
+// A command that discovers missing required input only at run time signals it by
+// returning a USAGE-coded clikit.Error; isUsageError recognizes exactly those, so
+// Run gives them the same verb-help treatment as a parse-time usage error.
+func TestIsUsageError(t *testing.T) {
+	if !isUsageError(Fail(ExitUsage, "USAGE", "needs --container", "")) {
+		t.Error("ExitUsage clikit.Error should count as a usage error")
+	}
+	if isUsageError(Fail(ExitRuntime, "RUNTIME", "io failed", "")) {
+		t.Error("ExitRuntime is not a usage error")
+	}
+	if isUsageError(Fail(ExitRefused, "NO_DRIVER", "no driver", "")) {
+		t.Error("ExitRefused is not a usage error")
+	}
+	if isUsageError(errors.New("plain")) {
+		t.Error("a plain error is not a usage error")
+	}
+	if isUsageError(nil) {
+		t.Error("nil is not a usage error")
+	}
+}
+
 // Errors that don't name a specific command (or aren't parse errors) fall back
 // to the terse structured error — usageHelpNode returns nil.
 func TestUsageHelpNode_FallbackCases(t *testing.T) {

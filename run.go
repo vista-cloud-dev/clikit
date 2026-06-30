@@ -68,6 +68,17 @@ func Run(name, description string, cli any, g *Globals, extra ...kong.Option) in
 	cc := NewContext(g, kctx.Command())
 	// Bind the Context (and the parser, for `schema`) into command Run methods.
 	if err := kctx.Run(cc, parser); err != nil {
+		// A command can discover missing required input only while running (e.g.
+		// an engine verb that needs a container). When it signals that with a
+		// USAGE-coded error, give it the same help-on-usage-error treatment as a
+		// parse error: the reason line plus the command's help, in human mode.
+		if isUsageError(err) {
+			if node := helpNodeForUsageError(kctx.Selected(), cc.Format); node != nil {
+				RenderError(cc, err)
+				_ = emitHelp(os.Stdout, parser.Model, node, true)
+				return exitOf(err)
+			}
+		}
 		RenderError(cc, err)
 		return exitOf(err)
 	}
@@ -76,23 +87,34 @@ func Run(name, description string, cli any, g *Globals, extra ...kong.Option) in
 
 // usageHelpNode decides whether a parse error should be answered with a
 // command's help rather than the terse structured usage error. It returns that
-// command node only when both hold: the output is human-facing (not JSON), and
-// the error resolved to a specific named command — i.e. the user typed a verb
-// that needs more input. Otherwise it returns nil and Run falls back to the
-// structured error (JSON consumers, unknown commands, root-level flag errors).
+// command node only when the error resolved to a specific named command — i.e.
+// the user typed a verb that needs more input. Otherwise it returns nil and Run
+// falls back to the structured error (unknown commands, root-level flag errors).
 func usageHelpNode(err error, format OutputFormat) *kong.Node {
-	if format == FormatJSON {
-		return nil
-	}
 	var pe *kong.ParseError
 	if !errors.As(err, &pe) || pe.Context == nil {
 		return nil
 	}
-	sel := pe.Context.Selected()
-	if sel == nil || sel.Type != kong.CommandNode {
+	return helpNodeForUsageError(pe.Context.Selected(), format)
+}
+
+// helpNodeForUsageError is the shared gate for both the parse-time and run-time
+// usage paths: show a command's help only when the output is human-facing (not
+// JSON) and a specific command node was resolved. nil → fall back to the terse
+// structured error (preserving the machine-readable envelope for JSON consumers).
+func helpNodeForUsageError(sel *kong.Node, format OutputFormat) *kong.Node {
+	if format == FormatJSON || sel == nil || sel.Type != kong.CommandNode {
 		return nil
 	}
 	return sel
+}
+
+// isUsageError reports whether a command's run-time error is a usage error
+// (a clikit.Error carrying ExitUsage) — i.e. the command found missing or
+// invalid required input only while running, and wants the help treatment.
+func isUsageError(err error) bool {
+	var e *Error
+	return errors.As(err, &e) && e.Exit == ExitUsage
 }
 
 // helpExit maps a help-render error to an exit code (ExitOK on success).
